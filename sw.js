@@ -3,8 +3,23 @@
  *      用户第二次进入时直接命中缓存，跳过 ~10 MB 的网络下载。
  * 缓存名带版本号，发布新版本后自动失效并重新下载。
  */
-const CACHE_NAME = 'mengmeng-fruit-7f2f9fc0';
+const CACHE_NAME = 'mengmeng-fruit-22581151';
 const CACHE_PREFIX = 'mengmeng-fruit-';
+/* 早期几版部署用过的缓存桶名。同一 origin 下所有 GitHub Pages 仓库共用存储配额，
+ * 不清掉会白占约 90 MB。 */
+const LEGACY_PREFIXES = ['intel-pages-cache-', '萌萌切水果-sw-cache-'];
+
+function isStaleCache(name) {
+	if (name === CACHE_NAME) {
+		return false;
+	}
+	if (name.startsWith(CACHE_PREFIX)) {
+		return true;
+	}
+	return LEGACY_PREFIXES.some(function (prefix) {
+		return name.startsWith(prefix);
+	});
+}
 
 /* 只预缓存页面自身要用到的小文件。
  * Intel.js / Intel.pck 在 Service Worker 安装前就已被页面下载，
@@ -33,7 +48,7 @@ self.addEventListener('activate', function (event) {
 	event.waitUntil((async function () {
 		const keys = await caches.keys();
 		await Promise.all(keys.map(function (key) {
-			if (key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME) {
+			if (isStaleCache(key)) {
 				return caches.delete(key);
 			}
 			return Promise.resolve(false);
