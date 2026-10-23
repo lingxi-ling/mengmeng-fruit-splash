@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+		<meta name="theme-color" content="#12121f">
+		<meta name="description" content="萌萌切水果 - 可爱风切水果网页版，支持鼠标与触屏操作。">
+		<title>萌萌切水果</title>
+		<style>
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body {
+	color: white;
+	background-color: #12121f;
+	overflow: hidden;
+	touch-action: none;
+	font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans', Arial, sans-serif;
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+#status {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	background-color: #12121f;
+	overflow: hidden;
+	transition: opacity 0.35s ease;
+}
+
+#status.is-hidden {
+	opacity: 0;
+	pointer-events: none;
+}
+
+#status-splash {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0.28;
+	filter: blur(2px);
+}
+
+#status-splash.show-image--false {
+	display: none;
+}
+
+#status-splash.fullsize--true {
+	height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
+
+#status-splash.use-filter--false {
+	image-rendering: pixelated;
+}
+
+#loader {
+	position: relative;
+	z-index: 1;
+	width: min(80vw, 420px);
+	text-align: center;
+}
+
+.loader-title {
+	font-size: 30px;
+	font-weight: 700;
+	letter-spacing: 3px;
+	text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.loader-sub {
+	margin-top: 8px;
+	font-size: 11px;
+	letter-spacing: 5px;
+	opacity: 0.45;
+}
+
+.loader-track {
+	margin-top: 28px;
+	height: 12px;
+	border-radius: 999px;
+	background-color: rgba(255, 255, 255, 0.12);
+	overflow: hidden;
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.loader-fill {
+	width: 0%;
+	height: 100%;
+	border-radius: 999px;
+	background-image: linear-gradient(90deg, #ff9a44, #ff5e7e, #a06bff);
+	transition: width 0.15s ease-out;
+}
+
+.loader-info {
+	margin-top: 12px;
+	display: flex;
+	justify-content: space-between;
+	font-size: 13px;
+	opacity: 0.85;
+	font-variant-numeric: tabular-nums;
+}
+
+.loader-tip {
+	margin-top: 24px;
+	font-size: 12px;
+	line-height: 1.7;
+	opacity: 0.42;
+}
+
+#status-progress {
+	display: none;
+}
+
+#status-notice {
+	position: relative;
+	z-index: 1;
+	display: none;
+	margin: 24px 2rem 0;
+	max-width: min(88vw, 560px);
+	background-color: #5b3943;
+	border-radius: 0.5rem;
+	border: 1px solid #9b3943;
+	color: #e0e0e0;
+	line-height: 1.5;
+	padding: 1rem;
+	text-align: center;
+	white-space: pre-wrap;
+}
+		</style>
+		<link id="-gd-engine-icon" rel="icon" type="image/png" href="Intel.icon.png" />
+		<link rel="apple-touch-icon" href="Intel.apple-touch-icon.png"/>
+		<link rel="manifest" href="Intel.manifest.json">
+		<!-- 只预加载引擎脚本。实测 as="fetch" 预加载会被浏览器中止后重新下载一遍 10 MB 引擎包，
+		     反而更慢，因此不对 Intel.wasm.gz / Intel.pck 做 fetch 预加载。 -->
+		<link rel="preload" href="Intel.js" as="script" />
+
+	</head>
+	<body>
+		<canvas id="canvas">
+			你的浏览器不支持 Canvas，请更换新版浏览器。
+		</canvas>
+
+		<noscript>
+			你的浏览器不支持 JavaScript，请开启 JavaScript 后重试。
+		</noscript>
+
+		<div id="status">
+			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="Intel.png" alt="">
+			<div id="loader">
+				<div class="loader-title">萌萌切水果</div>
+				<div class="loader-sub">MENG MENG FRUIT</div>
+				<div class="loader-track"><div class="loader-fill" id="loader-fill"></div></div>
+				<div class="loader-info">
+					<span id="loader-percent">0%</span>
+					<span id="loader-speed">准备下载引擎…</span>
+				</div>
+				<div class="loader-tip">首次加载需下载约 10 MB 引擎文件（已压缩）<br>完成后会被浏览器缓存，再次进入秒开</div>
+			</div>
+			<progress id="status-progress"></progress>
+			<div id="status-notice"></div>
+		</div>
+
+		<script src="Intel.js"></script>
+		<script>
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"Intel","experimentalVK":false,"fileSizes":{"Intel.pck":1451300,"Intel.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_THREADS_ENABLED = false;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const statusOverlay = document.getElementById('status');
+	const statusProgress = document.getElementById('status-progress');
+	const statusNotice = document.getElementById('status-notice');
+	const loaderFill = document.getElementById('loader-fill');
+	const loaderPercent = document.getElementById('loader-percent');
+	const loaderSpeed = document.getElementById('loader-speed');
+
+	let initializing = true;
+	let statusMode = '';
+	let lastLoaded = 0;
+	let lastStamp = 0;
+
+	function setStatusMode(mode) {
+		if (statusMode === mode || !initializing) {
+			return;
+		}
+		if (mode === 'hidden') {
+			statusOverlay.classList.add('is-hidden');
+			initializing = false;
+			setTimeout(function () {
+				statusOverlay.remove();
+			}, 400);
+			return;
+		}
+		statusOverlay.style.visibility = 'visible';
+		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
+		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
+		statusMode = mode;
+	}
+
+	function setStatusNotice(text) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const lines = text.split('\n');
+		lines.forEach(function (line) {
+			statusNotice.appendChild(document.createTextNode(line));
+			statusNotice.appendChild(document.createElement('br'));
+		});
+	}
+
+	function displayFailureNotice(err) {
+		console.error(err);
+		if (err instanceof Error) {
+			setStatusNotice(err.message);
+		} else if (typeof err === 'string') {
+			setStatusNotice(err);
+		} else {
+			setStatusNotice('发生未知错误，请刷新重试。');
+		}
+		setStatusMode('notice');
+		initializing = false;
+	}
+
+	// 下载满 100% 之后还要编译 WebAssembly 并初始化引擎，这段时间进度条不再前进，
+	// 不给提示的话用户会以为卡死了。
+	function showCompiling() {
+		loaderFill.style.width = '100%';
+		loaderPercent.textContent = '100%';
+		loaderSpeed.textContent = '正在启动引擎…';
+		loaderSpeed.style.opacity = '1';
+	}
+
+	function updateProgress(current, total) {
+		const percent = total > 0 ? Math.min(100, (current / total) * 100) : 0;
+		loaderFill.style.width = percent.toFixed(1) + '%';
+		loaderPercent.textContent = percent.toFixed(0) + '%';
+		// 最后一小段先切成“启动引擎”，避免下载刚满进度条却长时间静止
+		if (percent >= 99.5) {
+			showCompiling();
+			return;
+		}
+		const stamp = performance.now();
+		if (lastStamp) {
+			const elapsed = (stamp - lastStamp) / 1000;
+			if (elapsed > 0.2) {
+				const mib = (current - lastLoaded) / 1048576;
+				loaderSpeed.textContent = (mib / elapsed).toFixed(1) + ' MB/s';
+				lastLoaded = current;
+				lastStamp = stamp;
+			}
+		} else {
+			lastStamp = stamp;
+			lastLoaded = current;
+		}
+	}
+
+	if ('serviceWorker' in navigator) {
+		window.addEventListener('load', function () {
+			navigator.serviceWorker.register('./sw.js').catch(function (err) {
+				console.warn('Service worker 注册失败：', err);
+			});
+		});
+	}
+
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		const missingMsg = '当前浏览器缺少运行所需的环境：\n';
+		displayFailureNotice(missingMsg + missing.join('\n'));
+	} else {
+		setStatusMode('progress');
+		engine.startGame({
+			'onProgress': function (current, total) {
+				if (current > 0 && total > 0) {
+					statusProgress.value = current;
+					statusProgress.max = total;
+					updateProgress(current, total);
+				} else {
+					statusProgress.removeAttribute('value');
+					statusProgress.removeAttribute('max');
+				}
+			},
+		}).then(function () {
+			setStatusMode('hidden');
+		}, displayFailureNotice);
+	}
+}());
+		</script>
+	</body>
+</html>
