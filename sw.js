@@ -1,9 +1,9 @@
 /* 萌萌切水果 - GitHub Pages Service Worker
- * 作用：把引擎压缩包（Intel.wasm.gz）与静态资源写入 Cache Storage，
+ * 作用：把引擎（Intel.wasm，由 CDN 以 gzip 传输）与静态资源写入 Cache Storage，
  *      用户第二次进入时直接命中缓存，跳过 ~10 MB 的网络下载。
  * 缓存名带版本号，发布新版本后自动失效并重新下载。
  */
-const CACHE_NAME = 'mengmeng-fruit-22581151';
+const CACHE_NAME = 'mengmeng-fruit-v2-20261024';
 const CACHE_PREFIX = 'mengmeng-fruit-';
 /* 早期几版部署用过的缓存桶名。同一 origin 下所有 GitHub Pages 仓库共用存储配额，
  * 不清掉会白占约 90 MB。 */
@@ -23,7 +23,7 @@ function isStaleCache(name) {
 
 /* 只预缓存页面自身要用到的小文件。
  * Intel.js / Intel.pck 在 Service Worker 安装前就已被页面下载，
- * 再预缓存一遍会造成重复下载；Intel.wasm.gz 由引擎在下载时写入缓存。 */
+ * 再预缓存一遍会造成重复下载；Intel.wasm 由引擎首次加载时经 cacheFirst 写入缓存。 */
 const CORE_ASSETS = [
 	'./',
 	'./index.html',

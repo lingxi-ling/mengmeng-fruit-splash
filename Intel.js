@@ -109,94 +109,46 @@ const Features = {
 };
 
 const Preloader = /** @constructor */ function () { // eslint-disable-line no-unused-vars
-	const GZIP_SUFFIX = '.gz';
-
-	function supportsStreamDecompression() {
-		return typeof DecompressionStream !== 'undefined';
-	}
-
-	function cacheCompressedCopy(url, stream) {
-		// 把压缩包顺手写入 Cache Storage，下次访问直接命中缓存，省掉整个下载。
-		if (typeof caches === 'undefined' || !self.isSecureContext) {
-			return;
-		}
-		try {
-			caches.open('mengmeng-fruit-7f2f9fc0').then(function (cache) {
-				return cache.put(url, new Response(stream, { headers: { 'Content-Type': 'application/gzip' } }));
-			}).catch(function (err) {
-				console.warn('缓存压缩引擎包失败：', err);
-			});
-		} catch (err) {
-			console.warn('缓存压缩引擎包失败：', err);
-		}
-	}
-
-	function getTrackedResponse(response, load_status, decompress, cacheUrl) {
-		function onloadprogress(reader, controller) {
+	function getTrackedResponse(response, load_status) {
+		// 在 clone 上统计下载进度，原 response 原样返回（保留真实 URL 与 Content-Type），
+		// 这样 WebAssembly.instantiateStreaming 才能命中 Chrome 的 WASM 代码缓存，
+		// 否则每次刷新都会重新编译整份引擎。
+		const clone = response.clone();
+		const reader = clone.body.getReader();
+		function onloadprogress() {
 			return reader.read().then(function (result) {
-				if (load_status.done) {
-					return Promise.resolve();
-				}
 				if (result.value) {
-					controller.enqueue(result.value);
 					load_status.loaded += result.value.length;
 				}
 				if (!result.done) {
-					return onloadprogress(reader, controller);
+					return onloadprogress();
 				}
 				load_status.done = true;
 				return Promise.resolve();
 			});
 		}
-		let source = response.body;
-		if (cacheUrl) {
-			const branches = source.tee();
-			source = branches[0];
-			cacheCompressedCopy(cacheUrl, branches[1]);
-		}
-		if (decompress) {
-			// 浏览器原生解压：边下边解，进度条按解压后的真实字节数推进。
-			source = source.pipeThrough(new DecompressionStream('gzip'));
-		}
-		const reader = source.getReader();
-		const contentType = decompress
-			? 'application/wasm'
-			: (response.headers.get('Content-Type') || 'application/wasm');
-		return new Response(new ReadableStream({
-			start: function (controller) {
-				onloadprogress(reader, controller).then(function () {
-					controller.close();
-				});
-			},
-		}), { headers: { 'Content-Type': contentType } });
+		onloadprogress().catch(function () {});
+		return response;
 	}
 
-	function loadFetch(file, tracker, fileSize, raw, noGzip) {
+	function loadFetch(file, tracker, fileSize, raw) {
 		tracker[file] = {
 			total: fileSize || 0,
 			loaded: 0,
 			done: false,
 		};
-		const useGzip = !noGzip && raw && supportsStreamDecompression() && file.endsWith('.wasm');
-		const url = useGzip ? file + GZIP_SUFFIX : file;
-		return fetch(url).then(function (response) {
+		// GitHub Pages 的 CDN 会对 application/wasm 自动做 Content-Encoding: gzip 传输，
+		// 因此直接请求未压缩的 .wasm 即可：浏览器原生边下边解压、流式编译，并且能命中
+		// Chrome 的 WASM 代码缓存，避免每次刷新都重新编译整份引擎。
+		return fetch(file).then(function (response) {
 			if (!response.ok) {
-				if (useGzip) {
-					return loadFetch(file, tracker, fileSize, raw, true);
-				}
 				return Promise.reject(new Error(`Failed loading file '${file}'`));
 			}
-			const tr = getTrackedResponse(response, tracker[file], useGzip, useGzip ? url : null);
+			const tr = getTrackedResponse(response, tracker[file]);
 			if (raw) {
 				return Promise.resolve(tr);
 			}
 			return tr.arrayBuffer();
-		}).catch(function (err) {
-			if (useGzip) {
-				// 预压缩包不可用（缺失或网络错误）时回退到原始 wasm。
-				return loadFetch(file, tracker, fileSize, raw, true);
-			}
-			return Promise.reject(err);
 		});
 	}
 
@@ -761,8 +713,9 @@ const Engine = (function () {
 					// Make sure to test that when refactoring.
 					return new Promise(function (resolve, reject) {
 						promise.then(function (response) {
-							const cloned = new Response(response.clone().body, { 'headers': [['content-type', 'application/wasm']] });
-							Godot(me.config.getModuleConfig(loadPath, cloned)).then(function (module) {
+							// 直接复用原始 fetch Response（保留真实 URL 与 Content-Type），
+							// 让 instantiateStreaming 命中 Chrome 的 WASM 代码缓存。
+							Godot(me.config.getModuleConfig(loadPath, response)).then(function (module) {
 								const paths = me.config.persistentPaths;
 								module['initFS'](paths).then(function (err) {
 									me.rtenv = module;

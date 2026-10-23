@@ -153,7 +153,7 @@ body {
 		<link rel="apple-touch-icon" href="Intel.apple-touch-icon.png"/>
 		<link rel="manifest" href="Intel.manifest.json">
 		<!-- 只预加载引擎脚本。实测 as="fetch" 预加载会被浏览器中止后重新下载一遍 10 MB 引擎包，
-		     反而更慢，因此不对 Intel.wasm.gz / Intel.pck 做 fetch 预加载。 -->
+		     反而更慢，因此不对 Intel.wasm / Intel.pck 做 fetch 预加载。 -->
 		<link rel="preload" href="Intel.js" as="script" />
 
 	</head>
